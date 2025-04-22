@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en"> 
+ <head> 
+  <meta charset="UTF-8"> 
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+  <title>Airplane Crash Game</title> 
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #1e293b;
+      font-family: Arial, sans-serif;
+    }
+    #game-container {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #plane {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      background: url('https://img.icons8.com/color/80/airplane-take-off.png') no-repeat center/contain;
+      bottom: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 3;
+    }
+    #message {
+      position: absolute;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 26px;
+      color: white;
+      text-shadow: 2px 2px 6px black;
+      z-index: 5;
+    }
+    #scoreboard {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 20px;
+      color: white;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 12px;
+      border-radius: 8px;
+      z-index: 6;
+    }
+    #settings-button {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 50px;
+      height: 50px;
+      background: url('https://img.icons8.com/ios-filled/50/ffffff/settings.png') no-repeat center/contain;
+      cursor: pointer;
+      z-index: 7;
+    }
+    #settings {
+      display: none;
+      position: absolute;
+      bottom: 70px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      z-index: 8;
+    }
+    #settings button {
+      background-color: #ff4500;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+
+    /* Conteneur pour les boutons Miser, la barre de mise et Retirer */
+    #button-container {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 5;
+    }
+
+    /* Style pour la barre de mise */
+    #bet {
+      width: 120px;
+      padding: 8px;
+      font-size: 18px;
+      text-align: center;
+    }
+
+    /* Boutons Miser et Retirer */
+    #start, #withdraw {
+      width: 100px;
+      padding: 10px;
+      font-size: 18px;
+      border-radius: 5px;
+      transition: background-color 0.3s;
+    }
+
+    /* Bouton Miser initialement bleu */
+    #start {
+      background-color: #007bff;
+      color: white;
+    }
+
+    /* Bouton Retirer initialement bleu */
+    #withdraw {
+      background-color: #007bff;
+      color: white;
+      cursor: not-allowed;
+    }
+
+    /* Changement de couleur en jaune lorsque la mise est placée */
+    #start.active, #withdraw.active {
+      background-color: #ffcc00;
+      cursor: pointer;
+    }
+
+    /* Media queries pour ajuster le jeu sur des écrans plus petits */
+    @media (max-width: 600px) {
+      #controls {
+        flex-direction: column;
+        width: 80%;
+      }
+      #controls input, #controls button {
+        width: 100%;
+        margin-bottom: 10px;
+      }
+      #plane {
+        width: 60px;
+        height: 60px;
+      }
+    }
+  </style> 
+ </head> 
+ <body> 
+  <div id="game-container"> 
+   <div id="plane"></div> 
+   <div id="message"></div> 
+   <div id="scoreboard">
+    Gains totaux : 0 €
+   </div> 
+   <div id="settings-button"></div> 
+   <div id="settings"> 
+    <p>Entrez vos informations de transaction ici :</p> 
+    <input type="text" placeholder="Numéro Momo"> 
+    <button>Enregistrer</button> 
+   </div> 
+
+   <!-- Conteneur pour les boutons Miser, la barre de mise et Retirer -->
+   <div id="button-container">
+     <button id="start">Miser</button>
+     <input type="number" id="bet" placeholder="Votre mise (€)" min="1">
+     <button id="withdraw" disabled>Retirer</button>
+   </div>
+  </div> 
+  <audio id="background-music" loop> 
+   <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg"> Votre navigateur ne supporte pas l'élément audio. 
+  </audio> 
+  <script>
+    const plane = document.getElementById('plane');
+    const betInput = document.getElementById('bet');
+    const startButton = document.getElementById('start');
+    const withdrawButton = document.getElementById('withdraw');
+    const message = document.getElementById('message');
+    const scoreboard = document.getElementById('scoreboard');
+    const backgroundMusic = document.getElementById('background-music');
+    const settingsButton = document.getElementById('settings-button');
+    const settings = document.getElementById('settings');
+
+    let planePosition = 50;
+    let multiplier = 1;
+    let isCrashed = false;
+    let isGameRunning = false;
+    let totalGains = 0;
+    let betAmount = 0;
+    let flightInterval;
+    let crashTimeout;
+    let lastMultiplierIncreaseTime = 0;
+
+    settingsButton.addEventListener('click', () => {
+      settings.style.display = settings.style.display === 'none' ? 'block' : 'none';
+    });
+
+    function getRandomMultiplierChange() {
+      const rand = Math.random();
+      if (rand < 0.5) return 0.05;
+      if (rand < 0.9) return 0.1;
+      return 0.2;
+    }
+
+    function startGame() {
+      if (isGameRunning) return;
+
+      betAmount = parseFloat(betInput.value);
+      if (isNaN(betAmount) || betAmount <= 0) {
+        message.textContent = "Veuillez entrer une mise valide.";
+        return;
+      }
+
+      message.textContent = "L'avion décolle bientôt...";
+      startButton.disabled = true;
+      withdrawButton.disabled = false;
+      startButton.classList.add('active');
+      withdrawButton.classList.add('active');
+
+      isGameRunning = true;
+      isCrashed = false;
+      planePosition = 50;
+      multiplier = 1;
+      message.textContent = "L'avion est en vol. Retirez avant le crash !";
+      
+      backgroundMusic.play();
+
+      flightInterval = setInterval(updateFlight, 100);
+    }
+
+    function updateFlight() {
+      if (isCrashed || !isGameRunning) return;
+
+      planePosition += 5;
+      plane.style.bottom = planePosition + "px";
+
+      const now = Date.now();
+      if (now - lastMultiplierIncreaseTime >= 500) {
+        multiplier += getRandomMultiplierChange();
+        lastMultiplierIncreaseTime = now;
+      }
+
+      message.textContent = `Multiplicateur : x${multiplier.toFixed(2)}`;
+
+      if (Math.random() < 0.005) {
+        crash();
+      }
+    }
+
+    function crash() {
+      clearInterval(flightInterval);
+      isGameRunning = false;
+      isCrashed = true;
+      withdrawButton.disabled = true;
+      startButton.disabled = false;
+      startButton.classList.remove('active');
+      withdrawButton.classList.remove('active');
+      message.textContent = `CRASH ! Vous avez perdu votre mise de ${betAmount} €.`;
+
+      backgroundMusic.pause();
+      
+      setTimeout(startGame, 5000);
+    }
+
+    function withdraw() {
+      if (isCrashed || !isGameRunning) return;
+      const totalWin = betAmount * multiplier;
+      totalGains += totalWin;
+      scoreboard.textContent = `Gains totaux : ${totalGains.toFixed(2)} €`;
+      message.textContent = `Vous avez retiré avec succès, vous avez gagné ${totalWin.toFixed(2)} €.`;
+      
+      clearInterval(flightInterval);
+      isGameRunning = false;
+      isCrashed = false;
+      startButton.disabled = false;
+      withdrawButton.disabled = true;
+      startButton.classList.remove('active');
+      withdrawButton.classList.remove('active');
+      backgroundMusic.pause();
+    }
+
+    startButton.addEventListener('click', startGame);
+    withdrawButton.addEventListener('click', withdraw);
+  </script> 
+  
+</body></html>
+
